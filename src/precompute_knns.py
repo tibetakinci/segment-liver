@@ -17,7 +17,7 @@ def get_feats(model, loader):
     all_feats = []
     for pack in tqdm(loader):
         img = pack["img"]
-        feats = F.normalize(model.forward(img.cuda()).mean([2, 3]), dim=1)
+        feats = F.normalize(model.forward(img).mean([2, 3]), dim=1) #img.cuda()
         all_feats.append(feats.to("cpu", non_blocking=True))
     return torch.cat(all_feats, dim=0).contiguous()
 
@@ -53,10 +53,10 @@ def my_app(cfg: DictConfig) -> None:
         no_ap_model = torch.nn.Sequential(
             DinoFeaturizer(20, cfg),  # dim doesent matter
             LambdaLayer(lambda p: p[0]),
-        ).cuda()
+        ) #.cuda()
     else:
-        cut_model = load_model(cfg.model_type, join(cfg.output_root, "data")).cuda()
-        no_ap_model = nn.Sequential(*list(cut_model.children())[:-1]).cuda()
+        cut_model = load_model(cfg.model_type, join(cfg.output_root, "data")) #.cuda()
+        no_ap_model = nn.Sequential(*list(cut_model.children())[:-1]) #.cuda()
     par_model = torch.nn.DataParallel(no_ap_model)
 
     for crop_type in crop_types:
@@ -87,7 +87,7 @@ def my_app(cfg: DictConfig) -> None:
                         step = normed_feats.shape[0] // n_batches
                         print(normed_feats.shape)
                         for i in tqdm(range(0, normed_feats.shape[0], step)):
-                            torch.cuda.empty_cache()
+                            #torch.cuda.empty_cache()
                             batch_feats = normed_feats[i:i + step, :]
                             pairwise_sims = torch.einsum("nf,mf->nm", batch_feats, normed_feats)
                             all_nns.append(torch.topk(pairwise_sims, 30)[1])
