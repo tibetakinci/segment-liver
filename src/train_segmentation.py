@@ -9,7 +9,8 @@ from omegaconf import DictConfig, OmegaConf
 import pytorch_lightning as pl
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import TensorBoardLogger
-from pytorch_lightning.utilities.seed import seed_everything
+#from pytorch_lightning.utilities.seed import seed_everything
+from lightning_fabric.utilities.seed import seed_everything
 import torch.multiprocessing
 import seaborn as sns
 from pytorch_lightning.callbacks import ModelCheckpoint
@@ -55,6 +56,7 @@ class LitUnsupervisedSegmenter(pl.LightningModule):
         super().__init__()
         self.cfg = cfg
         self.n_classes = n_classes
+        self.validation_step_outputs = []  #NEW
 
         if not cfg.continuous:
             dim = n_classes
@@ -268,14 +270,28 @@ class LitUnsupervisedSegmenter(pl.LightningModule):
             cluster_preds = cluster_preds.argmax(1)
             self.cluster_metrics.update(cluster_preds, label)
 
-            return {
+            #### NEW ADDITION
+
+            output = {
                 'img': img[:self.cfg.n_images].detach().cpu(),
                 'linear_preds': linear_preds[:self.cfg.n_images].detach().cpu(),
                 "cluster_preds": cluster_preds[:self.cfg.n_images].detach().cpu(),
                 "label": label[:self.cfg.n_images].detach().cpu()}
 
-    def validation_epoch_end(self, outputs) -> None:
-        super().validation_epoch_end(outputs)
+            self.validation_step_outputs.append(output)
+
+            return output
+            # return {
+            # 'img': img[:self.cfg.n_images].detach().cpu(),
+            # 'linear_preds': linear_preds[:self.cfg.n_images].detach().cpu(),
+            # "cluster_preds": cluster_preds[:self.cfg.n_images].detach().cpu(),
+            # "label": label[:self.cfg.n_images].detach().cpu()}
+
+    #def validation_epoch_end(self, outputs) -> None:
+    def on_validation_epoch_end(self) -> None:
+        #super().validation_epoch_end(outputs)
+        super().on_validation_epoch_end()
+        #outputs = self.validation_step_outputs
         with torch.no_grad():
             tb_metrics = {
                 **self.linear_metrics.compute(),
@@ -284,8 +300,8 @@ class LitUnsupervisedSegmenter(pl.LightningModule):
 
             if self.trainer.is_global_zero and not self.cfg.submitting_to_aml:
                 #output_num = 0
-                output_num = random.randint(0, len(outputs) -1)
-                output = {k: v.detach().cpu() for k, v in outputs[output_num].items()}
+                output_num = random.randint(0, len(self.validation_step_outputs) -1)
+                output = {k: v.detach().cpu() for k, v in self.validation_step_outputs[output_num].items()}
 
                 fig, ax = plt.subplots(4, self.cfg.n_images, figsize=(self.cfg.n_images * 3, 4 * 3))
                 for i in range(self.cfg.n_images):
@@ -369,6 +385,7 @@ class LitUnsupervisedSegmenter(pl.LightningModule):
 
             self.linear_metrics.reset()
             self.cluster_metrics.reset()
+            self.validation_step_outputs.clear()
 
     def configure_optimizers(self):
         main_params = list(self.net.parameters())
@@ -466,6 +483,7 @@ def my_app(cfg: DictConfig) -> None:
         default_hp_metric=False
     )
 
+    """
     if cfg.submitting_to_aml:
         gpu_args = dict(gpus=1, val_check_interval=250)
 
@@ -478,6 +496,7 @@ def my_app(cfg: DictConfig) -> None:
 
         if gpu_args["val_check_interval"] > len(train_loader) // 4:
             gpu_args.pop("val_check_interval")
+    """
 
     trainer = Trainer(
         log_every_n_steps=cfg.scalar_log_freq,
@@ -492,7 +511,8 @@ def my_app(cfg: DictConfig) -> None:
                 mode="max",
             )
         ],
-        **gpu_args
+        accelerator="cpu" #"auto"
+        #**gpu_args
     )
     trainer.fit(model, train_loader, val_loader)
 
