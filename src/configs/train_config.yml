@@ -15,7 +15,7 @@ num_neighbors: 7
 dataset_name: "potsdam"
 
 # Used if dataset_name is "directory"
-dir_dataset_name: ~
+dir_dataset_name: "liverUS"
 dir_dataset_n_classes: 5
 
 has_labels: False

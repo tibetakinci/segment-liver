@@ -300,6 +300,8 @@ class LitUnsupervisedSegmenter(pl.LightningModule):
 
             if self.trainer.is_global_zero and not self.cfg.submitting_to_aml:
                 #output_num = 0
+                #output_num = random.randint(0, len(outputs) -1)
+                #output = {k: v.detach().cpu() for k, v in outputs[output_num].items()}
                 output_num = random.randint(0, len(self.validation_step_outputs) -1)
                 output = {k: v.detach().cpu() for k, v in self.validation_step_outputs[output_num].items()}
 
@@ -502,6 +504,7 @@ def my_app(cfg: DictConfig) -> None:
         log_every_n_steps=cfg.scalar_log_freq,
         logger=tb_logger,
         max_steps=cfg.max_steps,
+        #max_epochs=1,
         callbacks=[
             ModelCheckpoint(
                 dirpath=join(checkpoint_dir, name),

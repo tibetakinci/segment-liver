@@ -138,7 +138,8 @@ def my_app(cfg: DictConfig) -> None:
     # crop_types = ["five","random"]
     # crop_ratios = [.5, .7]
 
-    dataset_names = ["potsdam"]
+    #dataset_names = ["potsdam"]
+    dataset_names = ["directory"]
     img_sets = ["train", "val"]
     crop_types = ["five"]
     crop_ratios = [.5]
