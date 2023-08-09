@@ -12,7 +12,7 @@ max_steps: 5000
 batch_size: 16
 
 num_neighbors: 7
-dataset_name: "potsdam"
+dataset_name: "directory"
 
 # Used if dataset_name is "directory"
 dir_dataset_name: "liverUS"
@@ -171,7 +171,8 @@ hist_freq: 100
 
 hydra:
   run:
-    dir: "."
+    dir: "../logs"
+    #dir: "."
   output_subdir: ~
   #job_logging: "disabled"
   #hydra_logging: "disabled"

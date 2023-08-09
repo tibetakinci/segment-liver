@@ -35,15 +35,15 @@ def my_app(cfg: DictConfig) -> None:
     seed_everything(seed=0)
 
     print(data_dir)
-    print(cfg.output_root)
+    print(log_dir)
 
     image_sets = ["val", "train"]
-    dataset_names = ["potsdam"]
-    crop_types = ["five"]
+    #dataset_names = ["potsdam"]
+    #crop_types = ["five"]
 
     # Uncomment these lines to run on custom datasets
-    #dataset_names = ["directory"]
-    #crop_types = [None]
+    dataset_names = ["directory"]
+    crop_types = ["five"]
 
     res = 224
     n_batches = 16
