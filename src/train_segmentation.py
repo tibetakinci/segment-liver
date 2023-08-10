@@ -56,7 +56,7 @@ class LitUnsupervisedSegmenter(pl.LightningModule):
         super().__init__()
         self.cfg = cfg
         self.n_classes = n_classes
-        self.validation_step_outputs = []  #NEW
+        self.validation_step_outputs = []  #NEW ADDITION
 
         if not cfg.continuous:
             dim = n_classes
@@ -504,7 +504,7 @@ def my_app(cfg: DictConfig) -> None:
         log_every_n_steps=cfg.scalar_log_freq,
         logger=tb_logger,
         max_steps=cfg.max_steps,
-        #max_epochs=1,
+        #max_epochs=10,
         callbacks=[
             ModelCheckpoint(
                 dirpath=join(checkpoint_dir, name),

@@ -13,6 +13,7 @@ batch_size: 16
 
 num_neighbors: 7
 dataset_name: "directory"
+#dataset_name: "potsdam"
 
 # Used if dataset_name is "directory"
 dir_dataset_name: "liverUS"
