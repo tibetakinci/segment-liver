@@ -299,10 +299,10 @@ class LitUnsupervisedSegmenter(pl.LightningModule):
             }
 
             if self.trainer.is_global_zero and not self.cfg.submitting_to_aml:
-                #output_num = 0
+                #output_num = 0  BUNLA DENE
                 #output_num = random.randint(0, len(outputs) -1)
                 #output = {k: v.detach().cpu() for k, v in outputs[output_num].items()}
-                output_num = random.randint(0, len(self.validation_step_outputs) -1)
+                output_num = random.randint(0, len(self.validation_step_outputs)-1)
                 output = {k: v.detach().cpu() for k, v in self.validation_step_outputs[output_num].items()}
 
                 fig, ax = plt.subplots(4, self.cfg.n_images, figsize=(self.cfg.n_images * 3, 4 * 3))
@@ -387,7 +387,9 @@ class LitUnsupervisedSegmenter(pl.LightningModule):
 
             self.linear_metrics.reset()
             self.cluster_metrics.reset()
+            print("control1" + self.validation_step_outputs)
             self.validation_step_outputs.clear()
+            print("control2" + self.validation_step_outputs)
 
     def configure_optimizers(self):
         main_params = list(self.net.parameters())
