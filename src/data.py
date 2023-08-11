@@ -37,6 +37,12 @@ def create_pascal_label_colormap():
             colormap[:, channel] |= bit_get(ind, channel) << shift
         ind >>= 3
 
+    '''
+    print("COLORMAP START")
+    for color in colormap:
+        print(color)
+    print(len(colormap))
+    '''
     return colormap
 
 
@@ -563,3 +569,6 @@ class ContrastiveSegDataset(Dataset):
             ret["coord_aug"] = coord_aug.permute(1, 2, 0)
 
         return ret
+
+if __name__ == "__main__":
+    create_pascal_label_colormap()
