@@ -10,6 +10,7 @@ submitting_to_aml: False
 num_workers: 0
 max_steps: 5000
 batch_size: 16
+#max_epochs: 30
 
 num_neighbors: 7
 dataset_name: "directory"

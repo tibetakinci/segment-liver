@@ -504,7 +504,7 @@ def my_app(cfg: DictConfig) -> None:
         log_every_n_steps=cfg.scalar_log_freq,
         logger=tb_logger,
         max_steps=cfg.max_steps,
-        #max_epochs=10,
+        #max_epochs=cfg.max_epochs,
         callbacks=[
             ModelCheckpoint(
                 dirpath=join(checkpoint_dir, name),

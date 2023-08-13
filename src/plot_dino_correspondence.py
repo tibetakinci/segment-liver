@@ -10,7 +10,8 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from omegaconf import DictConfig, OmegaConf
-from pytorch_lightning.utilities.seed import seed_everything
+#from pytorch_lightning.utilities.seed import seed_everything
+from lightning_fabric.utilities.seed import seed_everything
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from matplotlib.colors import ListedColormap
@@ -37,8 +38,8 @@ def plot_heatmap(ax, image, heatmap, cmap="bwr", color=False, plot_img=True, sym
 
 
 def get_heatmaps(net, img, img_pos, query_points):
-    feats1, _ = net(img.cuda())
-    feats2, _ = net(img_pos.cuda())
+    feats1, _ = net(img) #.cuda())
+    feats2, _ = net(img_pos) #.cuda())
 
     sfeats1 = sample(feats1, query_points)
 
@@ -64,7 +65,7 @@ def my_app(cfg: DictConfig) -> None:
     pytorch_data_dir = cfg.pytorch_data_dir
     data_dir = join(cfg.output_root, "data")
     log_dir = join(cfg.output_root, "logs")
-    result_dir = join(cfg.output_root, "results", "correspondence")
+    result_dir = join(cfg.output_root, "results", "figures")
     os.makedirs(data_dir, exist_ok=True)
     os.makedirs(log_dir, exist_ok=True)
     seed_everything(seed=0, workers=True)
@@ -93,13 +94,13 @@ def my_app(cfg: DictConfig) -> None:
 
     data_dir = join(cfg.output_root, "data")
     if cfg.arch == "feature-pyramid":
-        cut_model = load_model(cfg.model_type, data_dir).cuda()
+        cut_model = load_model(cfg.model_type, data_dir) #.cuda()
         net = FeaturePyramidNet(cfg.granularity, cut_model, cfg.dim, cfg.continuous)
     elif cfg.arch == "dino":
         net = DinoFeaturizer(cfg.dim, cfg)
     else:
         raise ValueError("Unknown arch {}".format(cfg.arch))
-    net = net.cuda()
+    #net = net.cuda()
 
     for batch_val in loader:
         batch = batch_val
@@ -120,9 +121,9 @@ def my_app(cfg: DictConfig) -> None:
                 [
                     [-.1, 0.0],
                     [.5, .8],
-                    [-.7, -.7],
+                    [-.1, -.7],
                 ]
-            ).reshape(1, 3, 1, 2).cuda()
+            ).reshape(1, 3, 1, 2) #.cuda()
 
             img = batch["img"][img_num:img_num + 1]
             img_pos = batch["img_pos"][img_num:img_num + 1]
@@ -144,6 +145,7 @@ def my_app(cfg: DictConfig) -> None:
                 plot_img = point_num == 0
                 if plot_img:
                     axes[0].imshow(prep_for_plot(img[0]))
+
                 axes[0].scatter(img_point_h, img_point_w,
                                 c=colors[point_num], marker="x", s=500, linewidths=5)
 
@@ -151,6 +153,7 @@ def my_app(cfg: DictConfig) -> None:
                              plot_img=plot_img, cmap=cmaps[point_num], symmetric=False)
                 plot_heatmap(axes[2], prep_for_plot(img_pos[0]) * .8, heatmap_inter[point_num],
                              plot_img=plot_img, cmap=cmaps[point_num], symmetric=False)
+
             plt.show()
 
         if cfg.plot_movie:
@@ -170,7 +173,7 @@ def my_app(cfg: DictConfig) -> None:
                             np.linspace(key_points[i][0], key_points[i + 1][0], 50),
                             np.linspace(key_points[i][1], key_points[i + 1][1], 50),
                         ], axis=1).tolist())
-            query_points = torch.tensor(all_points).reshape(1, len(all_points), 1, 2).cuda()
+            query_points = torch.tensor(all_points).reshape(1, len(all_points), 1, 2) #.cuda()
 
 
             plt.style.use('dark_background')

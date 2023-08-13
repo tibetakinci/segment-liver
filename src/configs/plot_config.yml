@@ -1,10 +1,10 @@
 output_root: '../'
-pytorch_data_dir: '/datadrive/pytorch-data/'
+pytorch_data_dir: '../datasets/'
 experiment_name: "exp1"
-log_dir: "cleaning"
+log_dir: "../logs/"
 
-plot_correspondence: True
-plot_movie: True
+plot_correspondence: False
+plot_movie: True #True
 
 
 # Loader params
@@ -14,11 +14,14 @@ max_steps: 5000
 num_neighbors: 7
 
 batch_size: 16
-dataset_name: "cocostuff27"
+dataset_name: "directory"
 crop_type: ~
 crop_ratio: .5
 res: 224
 loader_crop_type: "center"
+
+dir_dataset_name: "liverUS"
+dir_dataset_n_classes: 5
 
 # Model Params
 extra_clusters: 0
@@ -45,7 +48,8 @@ stop_at_zero: True
 
 hydra:
   run:
-    dir: "."
+    dir: "../logs"
+    #dir: "."
   output_subdir: ~
   #job_logging: "disabled"
   #hydra_logging: "disabled"
