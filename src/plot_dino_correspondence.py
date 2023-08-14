@@ -65,7 +65,7 @@ def my_app(cfg: DictConfig) -> None:
     pytorch_data_dir = cfg.pytorch_data_dir
     data_dir = join(cfg.output_root, "data")
     log_dir = join(cfg.output_root, "logs")
-    result_dir = join(cfg.output_root, "results", "figures")
+    result_dir = join(cfg.output_root, "results", "correspondence")
     os.makedirs(data_dir, exist_ok=True)
     os.makedirs(log_dir, exist_ok=True)
     seed_everything(seed=0, workers=True)
@@ -106,12 +106,13 @@ def my_app(cfg: DictConfig) -> None:
         batch = batch_val
         break
 
-    colors = [(1, 0, 0), (0, 1, 0), (0, 0, 1), (1, 1, 0)]
+    colors = [(1, 0, 0), (0, 1, 0), (0, 0, 1), (1, 1, 0), (1, 0, 1)]
     cmaps = [
         ListedColormap([(1, 0, 0, i / 255) for i in range(255)]),
         ListedColormap([(0, 1, 0, i / 255) for i in range(255)]),
         ListedColormap([(0, 0, 1, i / 255) for i in range(255)]),
-        ListedColormap([(1, 1, 0, i / 255) for i in range(255)])
+        ListedColormap([(1, 1, 0, i / 255) for i in range(255)]),
+        ListedColormap([(1, 0, 1, i / 255) for i in range(255)])
     ]
 
     with torch.no_grad():
@@ -164,6 +165,9 @@ def my_app(cfg: DictConfig) -> None:
                 [.5, .8],
             ]
             all_points = []
+            img = batch["img"][img_num:img_num + 1]
+            img_pos = batch["img_pos"][img_num:img_num + 1]
+
             for i in range(len(key_points)):
                 all_points.extend([key_points[i]] * 60)
 
@@ -174,7 +178,6 @@ def my_app(cfg: DictConfig) -> None:
                             np.linspace(key_points[i][1], key_points[i + 1][1], 50),
                         ], axis=1).tolist())
             query_points = torch.tensor(all_points).reshape(1, len(all_points), 1, 2) #.cuda()
-
 
             plt.style.use('dark_background')
             fig, axes = plt.subplots(1, 3, figsize=(3 * 5, 1 * 5), dpi=100)
@@ -212,7 +215,7 @@ def my_app(cfg: DictConfig) -> None:
 
             with tqdm(total=len(frames)) as pbar:
                 animation.ArtistAnimation(fig, frames, blit=True).save(
-                    join(result_dir, 'attention_interp.mp4'),
+                    join(result_dir, 'correspondence.mp4'),
                     progress_callback=lambda i, n: pbar.update(),
                     writer=animation.FFMpegWriter(fps=30))
 

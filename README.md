@@ -91,7 +91,7 @@ STEGO basically aims to refine features of pre-trained backbone to yield semanti
 ### Extracting feature correspondences
 Self-supervised contrastive learning aims to train models to differentiate between similar and dissimilar data points without supervision. This is achieved by computing feature correspondence tensor whose entries represent the cosine similarity between image features. 
 The below figure demonstrates the correspondence of three different data points in between same image and it's K-nearest-neighbor with respect to DINO as the feature extractor.
-![ultrasound feature correspondence](results/figures/correspondence.png)
+![ultrasound feature correspondence](results/correspondence/correspondence.gif)
 
 ### Distilling feature correspondences
 In order to compose a high quality semantic segmentation, STEGO distills pre-trained feature correspondences to learn a low-dimensional pixel-wise embedding. This is achieved by utilizing an undirected graphical model, heavily inspired by CRF. 

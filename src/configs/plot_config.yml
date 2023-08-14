@@ -3,8 +3,8 @@ pytorch_data_dir: '../datasets/'
 experiment_name: "exp1"
 log_dir: "../logs/"
 
-plot_correspondence: False
-plot_movie: True #True
+plot_correspondence: True
+plot_movie: True
 
 
 # Loader params
