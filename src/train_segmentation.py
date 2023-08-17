@@ -308,7 +308,7 @@ class LitUnsupervisedSegmenter(pl.LightningModule):
                 fig, ax = plt.subplots(4, self.cfg.n_images, figsize=(self.cfg.n_images * 3, 4 * 3))
                 for i in range(self.cfg.n_images):
                     ax[0, i].imshow(prep_for_plot(output["img"][i]))
-                    ax[1, i].imshow(self.label_cmap[output["label"][i]])
+                    ax[1, i].imshow(self.label_cmap[output["label"][i][0]])
                     ax[2, i].imshow(self.label_cmap[output["linear_preds"][i]])
                     ax[3, i].imshow(self.label_cmap[self.cluster_metrics.map_clusters(output["cluster_preds"][i])])
                 ax[0, 0].set_ylabel("Image", fontsize=16)

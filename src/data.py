@@ -93,7 +93,7 @@ class DirectoryDataset(Dataset):
         assert len(self.img_files) > 0
         if os.path.exists(join(self.dir, "labels")):
             self.label_files = np.array(sorted(os.listdir(self.label_dir)))
-            assert len(self.img_files) == len(self.label_files)
+            #assert len(self.img_files) == len(self.label_files)
         else:
             self.label_files = None
 
@@ -101,7 +101,7 @@ class DirectoryDataset(Dataset):
         image_fn = self.img_files[index]
         img = Image.open(join(self.img_dir, image_fn))
 
-        if self.label_files is not None:
+        if self.label_files is not None and len(self.label_files) > index:
             label_fn = self.label_files[index]
             label = Image.open(join(self.label_dir, label_fn))
 
@@ -110,7 +110,7 @@ class DirectoryDataset(Dataset):
         torch.manual_seed(seed)
         img = self.transform(img)
 
-        if self.label_files is not None:
+        if self.label_files is not None and len(self.label_files) > index:
             random.seed(seed)
             torch.manual_seed(seed)
             label = self.target_transform(label)

@@ -46,7 +46,7 @@ def my_app(cfg: DictConfig) -> None:
     crop_types = [None]
 
     res = 224
-    n_batches = 16
+    n_batches = 8
 
     if cfg.arch == "dino":
         from modules import DinoFeaturizer, LambdaLayer

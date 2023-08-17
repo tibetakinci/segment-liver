@@ -9,15 +9,15 @@ submitting_to_aml: False
 # CHANGED num_workers: 24
 num_workers: 0
 max_steps: 5000
-batch_size: 16
-#max_epochs: 30
+batch_size: 8
+max_epochs: 30
 
 num_neighbors: 7
 dataset_name: "directory"
 #dataset_name: "potsdam"
 
 # Used if dataset_name is "directory"
-dir_dataset_name: "liverUS"
+dir_dataset_name: "liverUSfiltered"
 dir_dataset_n_classes: 5
 
 has_labels: False
