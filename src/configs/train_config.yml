@@ -1,6 +1,6 @@
 output_root: '../'
 pytorch_data_dir: '../datasets/'
-experiment_name: "expNoneCrop1"
+experiment_name: "05-fullRun-batch-32-dinoPatch-8"
 log_dir: "../logs/"
 azureml_logging: True
 submitting_to_aml: False
@@ -9,8 +9,8 @@ submitting_to_aml: False
 # CHANGED num_workers: 24
 num_workers: 0
 max_steps: 5000
-batch_size: 8
-max_epochs: 30
+batch_size: 32
+max_epochs: 20
 
 num_neighbors: 7
 dataset_name: "directory"
@@ -18,7 +18,7 @@ dataset_name: "directory"
 
 # Used if dataset_name is "directory"
 dir_dataset_name: "liverUSfiltered"
-dir_dataset_n_classes: 5
+dir_dataset_n_classes: 6
 
 has_labels: False
 crop_type: None
@@ -60,12 +60,12 @@ correspondence_weight: 1.0
 
 
 # IAROA vit small 1/31/22
-neg_inter_weight: 0.63
-pos_inter_weight: 0.25
-pos_intra_weight: 0.67
-neg_inter_shift: 0.46
-pos_inter_shift: 0.12
-pos_intra_shift: 0.18
+neg_inter_weight: 0.63      #λ-rand
+pos_inter_weight: 0.25      #λ-knn
+pos_intra_weight: 0.67      #λ-self
+neg_inter_shift: 0.46       #b-rand
+pos_inter_shift: 0.12       #b-knn
+pos_intra_shift: 0.18       #b-self
 
 # Potsdam vit small 1/31/22
 #neg_inter_weight: 0.63
