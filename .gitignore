@@ -2,3 +2,5 @@ datasets/
 logs/
 data/
 checkpoints/
+models/
+saved_models/

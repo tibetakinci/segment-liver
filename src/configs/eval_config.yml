@@ -1,15 +1,21 @@
 output_root: '../'
 pytorch_data_dir: '../datasets/'
-experiment_name: "test1"
+experiment_name: "test"
 log_dir: "../logs/"
 res: 320
-batch_size: 8
-num_workers: 24
-run_picie: True
+batch_size: 16
+num_workers: 0
+#num_workers: 24
+run_picie: False
 run_crf: True
 run_prediction: True
 dark_mode: True
 use_ddp: False
+
+dataset_name: "directory"
+dir_dataset_name: "liverUSfiltered"
+dir_dataset_n_classes: 6
+model_type: "vit_base"
 
 model_paths:
   #- "../saved_models/cocostuff27_vit_base_5.ckpt"
@@ -18,7 +24,7 @@ model_paths:
 
 hydra:
   run:
-    dir: "."
+    dir: "../logs"
   output_subdir: ~
   #job_logging: "disabled"
   #hydra_logging: "disabled"

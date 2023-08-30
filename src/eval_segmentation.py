@@ -61,35 +61,35 @@ def my_app(cfg: DictConfig) -> None:
     os.makedirs(join(result_dir, "img"), exist_ok=True)
     os.makedirs(join(result_dir, "label"), exist_ok=True)
     os.makedirs(join(result_dir, "cluster"), exist_ok=True)
-    os.makedirs(join(result_dir, "picie"), exist_ok=True)
+    #os.makedirs(join(result_dir, "picie"), exist_ok=True)
 
     for model_path in cfg.model_paths:
-        model = LitUnsupervisedSegmenter.load_from_checkpoint(model_path)
+        model = LitUnsupervisedSegmenter.load_from_checkpoint(model_path, map_location=torch.device('cpu'))
         print(OmegaConf.to_yaml(model.cfg))
 
         run_picie = cfg.run_picie and model.cfg.dataset_name == "cocostuff27"
         if run_picie:
             picie_state = torch.load("../saved_models/picie_and_probes.pth")
-            picie = picie_state["model"].cuda()
-            picie_cluster_probe = picie_state["cluster_probe"].module.cuda()
+            picie = picie_state["model"] #.cuda()
+            picie_cluster_probe = picie_state["cluster_probe"].module #.cuda()
             picie_cluster_metrics = picie_state["cluster_metrics"]
 
         loader_crop = "center"
         test_dataset = ContrastiveSegDataset(
             pytorch_data_dir=pytorch_data_dir,
-            dataset_name=model.cfg.dataset_name,
+            dataset_name=cfg.dataset_name,
             crop_type=None,
             image_set="val",
             transform=get_transform(cfg.res, False, loader_crop),
             target_transform=get_transform(cfg.res, True, loader_crop),
-            cfg=model.cfg,
+            cfg=cfg
         )
 
-        test_loader = DataLoader(test_dataset, cfg.batch_size * 2,
+        test_loader = DataLoader(test_dataset, cfg.batch_size,
                                  shuffle=False, num_workers=cfg.num_workers,
                                  pin_memory=True, collate_fn=flexible_collate)
 
-        model.eval().cuda()
+        model.eval() #.cuda()
 
         if cfg.use_ddp:
             par_model = torch.nn.DataParallel(model.net)
@@ -100,26 +100,28 @@ def my_app(cfg: DictConfig) -> None:
             if run_picie:
                 par_picie = picie
 
-        if model.cfg.dataset_name == "cocostuff27":
+        if cfg.dataset_name == "cocostuff27":
             # all_good_images = range(10)
             # all_good_images = range(250)
             # all_good_images = [61, 60, 49, 44, 13, 70] #Failure cases
             all_good_images = [19, 54, 67, 66, 65, 75, 77, 76, 124]  # Main figure
-        elif model.cfg.dataset_name == "cityscapes":
+        elif cfg.dataset_name == "cityscapes":
             # all_good_images = range(80)
             # all_good_images = [ 5, 20, 56]
             all_good_images = [11, 32, 43, 52]
+        elif cfg.dataset_name == "directory":
+            all_good_images = [11, 34, 42, 52, 75]
         else:
             raise ValueError("Unknown Dataset {}".format(model.cfg.dataset_name))
-        batch_nums = torch.tensor([n // (cfg.batch_size * 2) for n in all_good_images])
-        batch_offsets = torch.tensor([n % (cfg.batch_size * 2) for n in all_good_images])
+        batch_nums = torch.tensor([n // cfg.batch_size for n in all_good_images])
+        batch_offsets = torch.tensor([n % cfg.batch_size for n in all_good_images])
 
         saved_data = defaultdict(list)
         with Pool(cfg.num_workers + 5) as pool:
             for i, batch in enumerate(tqdm(test_loader)):
                 with torch.no_grad():
-                    img = batch["img"].cuda()
-                    label = batch["label"].cuda()
+                    img = batch["img"] #.cuda()
+                    label = batch["label"] #.cuda()
 
                     feats, code1 = par_model(img)
                     feats, code2 = par_model(img.flip(dims=[3]))
@@ -127,17 +129,17 @@ def my_app(cfg: DictConfig) -> None:
 
                     code = F.interpolate(code, label.shape[-2:], mode='bilinear', align_corners=False)
 
-                    linear_probs = torch.log_softmax(model.linear_probe(code), dim=1)
+                    #linear_probs = torch.log_softmax(model.linear_probe(code), dim=1)
                     cluster_probs = model.cluster_probe(code, 2, log_probs=True)
 
                     if cfg.run_crf:
-                        linear_preds = batched_crf(pool, img, linear_probs).argmax(1).cuda()
-                        cluster_preds = batched_crf(pool, img, cluster_probs).argmax(1).cuda()
+                        #linear_preds = batched_crf(pool, img, linear_probs).argmax(1).cuda()
+                        cluster_preds = batched_crf(pool, img, cluster_probs).argmax(1) #.cuda()
                     else:
-                        linear_preds = linear_probs.argmax(1)
+                        #linear_preds = linear_probs.argmax(1)
                         cluster_preds = cluster_probs.argmax(1)
 
-                    model.test_linear_metrics.update(linear_preds, label)
+                    #model.test_linear_metrics.update(linear_preds, label)
                     model.test_cluster_metrics.update(cluster_preds, label)
 
                     if run_picie:
@@ -147,7 +149,7 @@ def my_app(cfg: DictConfig) -> None:
                     if i in batch_nums:
                         matching_offsets = batch_offsets[torch.where(batch_nums == i)]
                         for offset in matching_offsets:
-                            saved_data["linear_preds"].append(linear_preds.cpu()[offset].unsqueeze(0))
+                            #saved_data["linear_preds"].append(linear_preds.cpu()[offset].unsqueeze(0))
                             saved_data["cluster_preds"].append(cluster_preds.cpu()[offset].unsqueeze(0))
                             saved_data["label"].append(label.cpu()[offset].unsqueeze(0))
                             saved_data["img"].append(img.cpu()[offset].unsqueeze(0))
@@ -156,7 +158,7 @@ def my_app(cfg: DictConfig) -> None:
         saved_data = {k: torch.cat(v, dim=0) for k, v in saved_data.items()}
 
         tb_metrics = {
-            **model.test_linear_metrics.compute(),
+            #**model.test_linear_metrics.compute(),
             **model.test_cluster_metrics.compute(),
         }
 
@@ -179,7 +181,7 @@ def my_app(cfg: DictConfig) -> None:
             fig, ax = plt.subplots(n_rows, len(good_images), figsize=(len(good_images) * 3, n_rows * 3))
             for i, img_num in enumerate(good_images):
                 plot_img = (prep_for_plot(saved_data["img"][img_num]) * 255).numpy().astype(np.uint8)
-                plot_label = (model.label_cmap[saved_data["label"][img_num]]).astype(np.uint8)
+                plot_label = (model.label_cmap[saved_data["label"][img_num][0]]).astype(np.uint8)
                 Image.fromarray(plot_img).save(join(join(result_dir, "img", str(img_num) + ".jpg")))
                 Image.fromarray(plot_label).save(join(join(result_dir, "label", str(img_num) + ".png")))
 
@@ -200,7 +202,7 @@ def my_app(cfg: DictConfig) -> None:
             ax[0, 0].set_ylabel("Image", fontsize=26)
             ax[1, 0].set_ylabel("Label", fontsize=26)
             if cfg.run_prediction:
-                ax[2, 0].set_ylabel("STEGO\n(Ours)", fontsize=26)
+                ax[2, 0].set_ylabel("STEGO", fontsize=26)
             if run_picie:
                 ax[3, 0].set_ylabel("PiCIE\n(Baseline)", fontsize=26)
 
@@ -209,9 +211,9 @@ def my_app(cfg: DictConfig) -> None:
             plt.show()
             plt.clf()
 
-        plot_cm(model.test_cluster_metrics.histogram, model.label_cmap, model.cfg)
-        plt.show()
-        plt.clf()
+        #plot_cm(model.test_cluster_metrics.histogram, model.label_cmap, model.cfg)
+        #plt.show()
+        #plt.clf()
 
 
 if __name__ == "__main__":
