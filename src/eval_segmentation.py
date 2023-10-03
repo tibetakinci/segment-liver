@@ -61,18 +61,10 @@ def my_app(cfg: DictConfig) -> None:
     os.makedirs(join(result_dir, "img"), exist_ok=True)
     os.makedirs(join(result_dir, "label"), exist_ok=True)
     os.makedirs(join(result_dir, "cluster"), exist_ok=True)
-    #os.makedirs(join(result_dir, "picie"), exist_ok=True)
 
     for model_path in cfg.model_paths:
         model = LitUnsupervisedSegmenter.load_from_checkpoint(model_path, map_location=torch.device('cpu'))
         print(OmegaConf.to_yaml(model.cfg))
-
-        run_picie = cfg.run_picie and model.cfg.dataset_name == "cocostuff27"
-        if run_picie:
-            picie_state = torch.load("../saved_models/picie_and_probes.pth")
-            picie = picie_state["model"] #.cuda()
-            picie_cluster_probe = picie_state["cluster_probe"].module #.cuda()
-            picie_cluster_metrics = picie_state["cluster_metrics"]
 
         loader_crop = "center"
         test_dataset = ContrastiveSegDataset(
@@ -93,24 +85,16 @@ def my_app(cfg: DictConfig) -> None:
 
         if cfg.use_ddp:
             par_model = torch.nn.DataParallel(model.net)
-            if run_picie:
-                par_picie = torch.nn.DataParallel(picie)
         else:
             par_model = model.net
-            if run_picie:
-                par_picie = picie
 
         if cfg.dataset_name == "cocostuff27":
-            # all_good_images = range(10)
-            # all_good_images = range(250)
-            # all_good_images = [61, 60, 49, 44, 13, 70] #Failure cases
-            all_good_images = [19, 54, 67, 66, 65, 75, 77, 76, 124]  # Main figure
+            all_good_images = [19, 54, 67, 66, 65, 75, 77, 76, 124]
         elif cfg.dataset_name == "cityscapes":
-            # all_good_images = range(80)
-            # all_good_images = [ 5, 20, 56]
             all_good_images = [11, 32, 43, 52]
         elif cfg.dataset_name == "directory":
-            all_good_images = [11, 34, 42, 52, 75]
+            #all_good_images = [0, 7, 9, 38, 63, 75]                                     #FAIL CASES
+            all_good_images = [22, 26, 29, 32, 41, 44, 53]  #TODO: Adjust this variable with indexes of good images to be plotted
         else:
             raise ValueError("Unknown Dataset {}".format(model.cfg.dataset_name))
         batch_nums = torch.tensor([n // cfg.batch_size for n in all_good_images])
@@ -129,37 +113,25 @@ def my_app(cfg: DictConfig) -> None:
 
                     code = F.interpolate(code, label.shape[-2:], mode='bilinear', align_corners=False)
 
-                    #linear_probs = torch.log_softmax(model.linear_probe(code), dim=1)
                     cluster_probs = model.cluster_probe(code, 2, log_probs=True)
 
                     if cfg.run_crf:
-                        #linear_preds = batched_crf(pool, img, linear_probs).argmax(1).cuda()
                         cluster_preds = batched_crf(pool, img, cluster_probs).argmax(1) #.cuda()
                     else:
-                        #linear_preds = linear_probs.argmax(1)
                         cluster_preds = cluster_probs.argmax(1)
 
-                    #model.test_linear_metrics.update(linear_preds, label)
                     model.test_cluster_metrics.update(cluster_preds, label)
-
-                    if run_picie:
-                        picie_preds = picie_cluster_metrics.map_clusters(
-                            picie_cluster_probe(par_picie(img), None)[1].argmax(1).cpu())
 
                     if i in batch_nums:
                         matching_offsets = batch_offsets[torch.where(batch_nums == i)]
                         for offset in matching_offsets:
-                            #saved_data["linear_preds"].append(linear_preds.cpu()[offset].unsqueeze(0))
                             saved_data["cluster_preds"].append(cluster_preds.cpu()[offset].unsqueeze(0))
                             saved_data["label"].append(label.cpu()[offset].unsqueeze(0))
                             saved_data["img"].append(img.cpu()[offset].unsqueeze(0))
-                            if run_picie:
-                                saved_data["picie_preds"].append(picie_preds.cpu()[offset].unsqueeze(0))
         saved_data = {k: torch.cat(v, dim=0) for k, v in saved_data.items()}
 
         tb_metrics = {
-            #**model.test_linear_metrics.compute(),
-            **model.test_cluster_metrics.compute(),
+            **model.test_cluster_metrics.compute(),         #HERE
         }
 
         print("")
@@ -170,9 +142,6 @@ def my_app(cfg: DictConfig) -> None:
             n_rows = 3
         else:
             n_rows = 2
-
-        if run_picie:
-            n_rows += 1
 
         if cfg.dark_mode:
             plt.style.use('dark_background')
@@ -189,22 +158,15 @@ def my_app(cfg: DictConfig) -> None:
                 ax[1, i].imshow(plot_label)
                 if cfg.run_prediction:
                     plot_cluster = (model.label_cmap[
-                        model.test_cluster_metrics.map_clusters(
-                            saved_data["cluster_preds"][img_num])]) \
-                        .astype(np.uint8)
+                        model.test_cluster_metrics.map_clusters(        #HERE
+                            saved_data["cluster_preds"][img_num])]).astype(np.uint8)
                     Image.fromarray(plot_cluster).save(join(join(result_dir, "cluster", str(img_num) + ".png")))
                     ax[2, i].imshow(plot_cluster)
-                if run_picie:
-                    picie_img = model.label_cmap[saved_data["picie_preds"][img_num]].astype(np.uint8)
-                    ax[3, i].imshow(picie_img)
-                    Image.fromarray(picie_img).save(join(join(result_dir, "picie", str(img_num) + ".png")))
 
             ax[0, 0].set_ylabel("Image", fontsize=26)
             ax[1, 0].set_ylabel("Label", fontsize=26)
             if cfg.run_prediction:
                 ax[2, 0].set_ylabel("STEGO", fontsize=26)
-            if run_picie:
-                ax[3, 0].set_ylabel("PiCIE\n(Baseline)", fontsize=26)
 
             remove_axes(ax)
             plt.tight_layout()

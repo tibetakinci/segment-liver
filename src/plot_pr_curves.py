@@ -1,21 +1,19 @@
-import io
 from datetime import datetime
 
-import PIL.Image
 import hydra
 import pytorch_lightning as pl
 import seaborn as sns
 from omegaconf import DictConfig, OmegaConf
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import TensorBoardLogger
-from pytorch_lightning.utilities.seed import seed_everything
+from lightning_fabric.utilities.seed import seed_everything
 from sklearn.metrics import auc, precision_recall_curve, average_precision_score
 from torch.utils.tensorboard.summary import hparams
 from torchvision.transforms import ToTensor
 from data import *
 from modules import *
 from train_segmentation import get_class_labels
-
+from train_segmentation import LitUnsupervisedSegmenter
 
 
 @torch.jit.script
@@ -72,17 +70,15 @@ class LitRecalibrator(pl.LightningModule):
         super().__init__()
         self.cfg = cfg
         self.n_classes = n_classes
+        self.validation_step_outputs = []
 
         if not cfg.continuous:
             dim = n_classes
         else:
             dim = cfg.dim
 
-        data_dir = join(cfg.output_root, "data")
-        self.moco = FeaturePyramidNet(cfg.granularity, load_model("mocov2", data_dir).cuda(), dim, cfg.continuous)
-        # self.dino = DinoFeaturizer(dim, cfg)
-        # self.dino = LitUnsupervisedSegmenter.load_from_checkpoint("../models/vit_base_cocostuff27.ckpt").net
-        # self.crf = CRFModule()
+        #self.dino = DinoFeaturizer(dim, cfg)
+        self.dino = LitUnsupervisedSegmenter.load_from_checkpoint("../logs/FULLRUN10-lr:5e-4/epoch=53-step=15444.ckpt").net
         self.cm_metrics = UnsupervisedMetrics(
             "confusion_matrix/", n_classes, 0, False)
         self.automatic_optimization = False
@@ -111,9 +107,9 @@ class LitRecalibrator(pl.LightningModule):
             feat_samples2 = sample(feats2, coords2)
 
             label_samples1 = sample(F.one_hot(label1 + 1, self.n_classes + 1)
-                                    .to(torch.float).permute(0, 3, 1, 2), coords1)
+                                    .to(torch.float).permute(1, 0, 2, 3, 4)[0], coords1)
             label_samples2 = sample(F.one_hot(label2 + 1, self.n_classes + 1)
-                                    .to(torch.float).permute(0, 3, 1, 2), coords2)
+                                    .to(torch.float).permute(1, 0, 2, 3, 4)[0], coords2)
 
             fd = tensor_correlation(norm(feat_samples1), norm(feat_samples2))
             ld = tensor_correlation(label_samples1, label_samples2)
@@ -129,28 +125,27 @@ class LitRecalibrator(pl.LightningModule):
             label = batch["label"]
 
             dino_feats, dino_code = self.dino(img)
-            moco_feats, moco_code = self.moco(img)
 
             coord_shape = [img.shape[0], self.cfg.feature_samples, self.cfg.feature_samples, 2]
             coords1 = torch.rand(coord_shape, device=img.device) * 2 - 1
             coords2 = torch.rand(coord_shape, device=img.device) * 2 - 1
 
-            crf_fd = self.get_crf_fd(img, coords1, coords2)
-
             ld, stego_fd, l1, l2 = self.get_net_fd(dino_code, dino_code, label, label, coords1, coords2)
             ld, dino_fd, l1, l2 = self.get_net_fd(dino_feats, dino_feats, label, label, coords1, coords2)
-            ld, moco_fd, l1, l2 = self.get_net_fd(moco_feats, moco_feats, label, label, coords1, coords2)
 
-            return dict(
+            output = dict(
                 dino_fd=dino_fd,
                 stego_fd=stego_fd,
-                moco_fd=moco_fd,
-                crf_fd=crf_fd,
                 ld=ld
             )
 
-    def validation_epoch_end(self, outputs) -> None:
-        # self.cm_metrics.compute()
+            self.validation_step_outputs.append(output)
+            return output
+
+    def on_validation_epoch_end(self) -> None:
+        #super().on_validation_epoch_end()
+        self.cm_metrics.compute()
+        outputs = self.validation_step_outputs
 
         all_outputs = {}
         for k in outputs[0].keys():
@@ -158,11 +153,11 @@ class LitRecalibrator(pl.LightningModule):
             all_outputs[k] = t
 
         def plot_pr(preds, targets, name):
-            preds = preds.cpu().reshape(-1)
+            preds = preds.cpu().reshape(-1, 1)
             preds -= preds.min()
             preds /= preds.max()
             targets = targets.to(torch.int64).cpu().reshape(-1)
-            precisions, recalls, _ = precision_recall_curve(targets, preds)
+            precisions, recalls, _ = precision_recall_curve(targets, preds, pos_label=0)
             average_precision = average_precision_score(targets, preds)
             plt.plot(recalls, precisions, label="AP={}% {}".format(int(average_precision * 100), name))
 
@@ -194,21 +189,21 @@ class LitRecalibrator(pl.LightningModule):
 
         if self.trainer.is_global_zero:
             # plt.style.use('dark_background')
+            '''
             print("Plotting")
             plt.figure(figsize=(5, 4), dpi=100)
             plot_cm()
             plt.tight_layout()
             plt.show()
             plt.clf()
+            '''
 
             print("Plotting")
             # plt.style.use('dark_background')
             plt.figure(figsize=(5, 4), dpi=100)
             ld = all_outputs["ld"]
-            plot_pr(prep_fd(all_outputs["stego_fd"]), ld, "STEGO (Ours)")
+            plot_pr(prep_fd(all_outputs["stego_fd"]), ld, "STEGO")
             plot_pr(prep_fd(all_outputs["dino_fd"]), ld, "DINO")
-            plot_pr(prep_fd(all_outputs["moco_fd"]), ld, "MoCoV2")
-            plot_pr(prep_fd(all_outputs["crf_fd"]), ld, "CRF")
             plt.xlim([0, 1])
             plt.ylim([0, 1])
             plt.legend(fontsize=12)
@@ -217,6 +212,7 @@ class LitRecalibrator(pl.LightningModule):
             plt.tight_layout()
             plt.show()
 
+        self.validation_step_outputs.clear()
         return None
 
     def configure_optimizers(self):
@@ -227,10 +223,8 @@ class LitRecalibrator(pl.LightningModule):
 def my_app(cfg: DictConfig) -> None:
     print(OmegaConf.to_yaml(cfg))
     pytorch_data_dir = cfg.pytorch_data_dir
-    data_dir = join(cfg.output_root, "data")
     log_dir = join(cfg.output_root, "logs")
     checkpoint_dir = join(cfg.output_root, "checkpoints")
-    os.makedirs(data_dir, exist_ok=True)
     os.makedirs(log_dir, exist_ok=True)
 
     seed_everything(seed=0, workers=True)
@@ -280,10 +274,9 @@ def my_app(cfg: DictConfig) -> None:
     trainer = Trainer(
         log_every_n_steps=10,
         val_check_interval=steps,
-        gpus=1,
         max_steps=steps,
         limit_val_batches=100,
-        accelerator="ddp",
+        accelerator="auto",
         num_sanity_val_steps=0,
         logger=tb_logger,
     )

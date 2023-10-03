@@ -45,7 +45,6 @@ def my_app(cfg: DictConfig) -> None:
     dataset_names = ["directory"]
     crop_types = [None]
 
-    res = 224
     n_batches = 8
 
     if cfg.arch == "dino":
@@ -65,7 +64,7 @@ def my_app(cfg: DictConfig) -> None:
                 nice_dataset_name = cfg.dir_dataset_name if dataset_name == "directory" else dataset_name
 
                 feature_cache_file = join(pytorch_data_dir, "nns", "nns_{}_{}_{}_{}_{}.npz".format(
-                    cfg.model_type, nice_dataset_name, image_set, crop_type, res))
+                    cfg.model_type, nice_dataset_name, image_set, crop_type, cfg.res))
 
                 if not os.path.exists(feature_cache_file):
                     print("{} not found, computing".format(feature_cache_file))
@@ -74,8 +73,8 @@ def my_app(cfg: DictConfig) -> None:
                         dataset_name=dataset_name,
                         crop_type=crop_type,
                         image_set=image_set,
-                        transform=get_transform(res, False, "center"),
-                        target_transform=get_transform(res, True, "center"),
+                        transform=get_transform(cfg.res, False, "center"),
+                        target_transform=get_transform(cfg.res, True, "center"),
                         cfg=cfg,
                     )
 

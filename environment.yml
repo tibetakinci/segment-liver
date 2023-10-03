@@ -9,14 +9,14 @@ dependencies:
 - pytorch>1.7.1
 - torchvision==0.8.2
 - torchaudio>0.7.2
-#- cudatoolkit=11.0
-#- nvidia-apex==0.1.0
+- cudatoolkit=11.0
+- nvidia-apex==0.1.0
 - scikit-image
 - opencv
-#- cupy
+- cupy
 - pytorch-lightning
 - pip:
-  - azureml-core #1.52.0 NEW ADDITION
+  - azureml-core #1.52.0
   - matplotlib>=3.3,<3.4 #3.7.2
   - psutil>=5.8,<5.9 #5.9.5
   - tqdm>=4.59,<4.60 #4.64.0
@@ -25,7 +25,7 @@ dependencies:
   - numpy>=1.10,<1.20 #1.24.4 -> 1.23.4
   - tensorboard==2.4.0 #2.13.0
   - future==0.17.1 #0.18.3
-  - --find-links https://pytorch-geometric.com/whl/torch-1.7.0+cu110.html #??
+  - --find-links https://pytorch-geometric.com/whl/torch-1.7.0+cu110.html #NOT INSTALLED
   - kornia #0.6.12
   - hydra-core #1.3.2
   - wget #3.2
@@ -35,4 +35,5 @@ dependencies:
   - pydensecrf #NOT INSTALLED
   - setuptools==59.5.0 #61.2.0
   - pyDeprecate==0.3.1 #0.3.2
+  - sklearn
 name: stego

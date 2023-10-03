@@ -266,13 +266,13 @@ class UnsupervisedMetrics(Metric):
         fn = torch.sum(self.histogram, dim=1) - tp
 
         iou = tp / (tp + fp + fn)
-        prc = tp / (tp + fn)
-        opc = torch.sum(tp) / torch.sum(self.histogram)
+        dice = 2.0*tp / (2.0*tp + fp + fn)
+        acc = torch.sum(tp) / torch.sum(self.histogram)
 
         metric_dict = {self.prefix + "mIoU": iou[~torch.isnan(iou)].mean().item(),
-                       self.prefix + "Accuracy": opc.item()}
+                       self.prefix + "Accuracy": acc.item(),
+                       self.prefix + "Dice": dice.mean().item()}
         return {k: 100 * v for k, v in metric_dict.items()}
-
 
 def flexible_collate(batch):
     r"""Puts each data field into a tensor with outer dimension batch size"""

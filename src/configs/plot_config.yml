@@ -4,7 +4,7 @@ experiment_name: "exp1"
 log_dir: "../logs/"
 
 plot_correspondence: True
-plot_movie: True
+plot_movie: False
 
 
 # Loader params
@@ -20,14 +20,14 @@ crop_ratio: .5
 res: 224
 loader_crop_type: "center"
 
-dir_dataset_name: "liverUS"
-dir_dataset_n_classes: 5
+dir_dataset_name: "liverUSfiltered"
+dir_dataset_n_classes: 6
 
 # Model Params
 extra_clusters: 0
 use_true_labels: False
 use_recalibrator: False
-model_type: "vit_small"
+model_type: "vit_base"
 arch: "dino"
 use_fit_model: False
 dino_feat_type: "feat"
@@ -35,12 +35,12 @@ projection_type: "nonlinear"
 dino_patch_size: 8
 granularity: 1
 continuous: True
-dim: 70
+dim: 90
 dropout: True
 zero_clamp: True
 
 
-lr: 5e-4
+lr: 5e-5
 pretrained_weights: ~
 use_salience: False
 stabalize: False

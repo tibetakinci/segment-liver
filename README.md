@@ -6,7 +6,8 @@ The original implementation for STEGO model can be found [here](https://github.c
 ## Contents
 - [Setup](#setup)
 - [Training](#training)
-- [Overview of STEGO](#overview)
+- [Evaluation & Plotting](#evaluation-and-plotting)
+- [Overview of STEGO](#overview-of-stego)
   - [Extracting feature correspondences](#extracting-feature-correspondences)
   - [Distilling feature correspondences](#distilling-feature-correspondences)
   - [The STEGO architecture](#the-stego-architecture)
@@ -27,7 +28,7 @@ conda activate stego
 ```
 
 ### Prepare dataset:
-To train model please place dataset to pytorch data directory, variable **pytorch_data_dir** in [train_config.yml](src/configs/train_config.yml) with the following structure:    
+To train model don't forget to adjust variable **pytorch_data_dir** in [train_config.yml](src/configs/train_config.yml). The dataset directory should be in the following structure:    
 
 ```
 dataset_name
@@ -47,12 +48,23 @@ dataset_name
         └── unique_img_name_4.png 
 ```
 > Note: [convert_dataset.py](src/convert_dataset.py) can be used to convert images between **.png** and **.jpg** by adjusting commented variables.  
-> Note: If you do not have any labels, disregard **labels** directory from the structure.
+> Note: Disregard **labels** directory from the structure if you do not have any labels, since it is only used for evaluation. 
+> Note: Dataset should be downloaded from NAS. Please contact your supervisor to access dataset on NAS.
 
 ### Update train_config.yml:
-Adjust variables *pytorch_data_dir* and *dir_dataset_name* according to dataset directory and dataset name respectively.  
-Update *dir_dataset_n_classes* variable for desired clustering class number if needed.  
-Make sure that *crop_type* variable is set to **"five"**, **"random"** or **None** according to cropping used.
+- Adjust variables *pytorch_data_dir* and *dir_dataset_name* according to dataset directory and dataset name respectively. Keep *dataset_name* variable as 'directory'  
+- Update *dir_dataset_n_classes* variable for desired clustering class number if needed.  
+- Make sure that *crop_type* variable is set to **"five"**, **"random"** or **None** according to cropping used.
+- Two model types can be used, **"vit_base"** or **"vit_small"** by adjusting *model_type* variable
+- Hyperparameters used in loss function can be found under feature contrastive parameters. Tuning hyperparameters are challenging. Please refer to the Section A.11 from the [paper](https://arxiv.org/pdf/2203.08414.pdf).
+- *n_images* variable under log parameters adjusts number of images to be plotted at inference time. 
+- Variables such as *max_steps*, *max_epochs*, *lr*, *batch_size* can be setup accordingly.
+
+### Download pretrained model:
+By running below code, you can download the pretrained models to three different datasets; potsdam, cityscapes and cocostuff.
+```
+python download_models.py
+```
 
 ## Training
 ### Crop dataset:
@@ -81,7 +93,31 @@ To monitor training with tensorboard run the following from root directory:
 tensorboard --logdir logs
 ```
 
-## Overview
+## Evaluation and Plotting
+### Evaluate pretrained model:
+Configuration of evaluation is set in [eval_config.yml](src/configs/eval_config.yml) file. Please adjust variables such as *pytorch_data_dir*, *dir_dataset_name*, *dir_dataset_n_classes*, *model_paths*.
+*model_paths* variable should be set to .ckpt file of your pretrained model.  
+The images you would like to plot are specified in [eval_segmentation.py](src/eval_segmentation.py) file. List variable *all_good_images* contains indexes of images would like to be plotted.  
+After setting up evaluation configuration and images to be plotted, you can run the code by typing:
+```
+python eval_segmentation.py
+```
+This code will open a .png file on your window which you can save and close.
+
+### Plot DINO correspondence:
+As DINO features are distilled in STEGO, plotting DINO features from your images are very useful. Configuration of plotting DINO correspondence is found at [plot_config.yml](src/configs/plot_config.yml). Make sure *dir_dataset_name* variable is correct and *dataset_name* is set to "directory".
+*plot_correspondence* and *plot_movie* variables determine to output a .png image file or .mp4 video file.  
+From [plot_dino_correspondence.py](src/plot_dino_correspondence.py) file, keep in mind the variables *colors*, *cmaps*, *img_num* and *query_points*:
+- *colors* and *cmaps* variables indicate different colors to be used in plotting. Keep in mind the number of *query_points* should not be higher than number of *colors* to prevent confusion.  
+- *img_num* is the index of image that would be used in plotting.
+- *query_points* are tuples indicating coordinates in x and y axis.
+
+After setting up variables, please run the above code:
+```
+python eval_segmentation.py
+```
+
+## Overview of STEGO
 ### Introduction
 Semantic segmentation is the task of classifying each pixel in an image into specific labels. Earlier studies primarily emphasized supervised learning through the assignment of ground truth labels, while more recent research suggests the adoption of unsupervised learning to mitigate labor-intensive challenges.
 Numerous techniques have been developed to acquire semantically significant features. However in contrast to previous methods, STEGO make use of pre-trained features and focuses on distilling knowledge. This decision is motivated by the observed correlations between unsupervised features being semantically consistent, both within the same image and across images.
@@ -94,13 +130,11 @@ The below figure demonstrates the correspondence of three different data points 
 ![ultrasound feature correspondence](results/correspondence/correspondence.gif)
 
 ### Distilling feature correspondences
-In order to compose a high quality semantic segmentation, STEGO distills pre-trained feature correspondences to learn a low-dimensional pixel-wise embedding. This is achieved by utilizing an undirected graphical model, heavily inspired by CRF. 
-Undirected graph model utilized to refine noisy or low-resolution class predictions by aligning them with edges and color-related regions in the input image. 
+In order to compose a high quality semantic segmentation, STEGO distills pre-trained feature correspondences to learn a low-dimensional pixel-wise embedding. This is heavily inspired by CRF, which utilizes an undirected graphical model to refine noisy or low-resolution class predictions. 
 In distillation process, visual backbone is kept frozen and training a segmentation head is focused. The novel contrastive loss function of the STEGO encourages distilled features to form compact clusters.
 **S**patial **C**enter operation and 0-Clamping is introduced to the loss function because of such challenges as being unstable sometimes and balancing the learning signal for small objects.
 Together with SC and 0-Clamp, the final correlation loss is defined as:  
 ![contrastive loss](results/figures/loss.png)
-![contrastive loss](results/figures/loss.svg)
 
 ### The STEGO architecture
 First step of STEGO, frozen visual backbone is used as an input to segmentation head for predicting distilled features. Three distinct instantiations are utilized to train the segmentation head, self, KNN and random correspondences. 
@@ -109,4 +143,6 @@ Prediction pipeline of STEGO includes clustering and CRF as last two steps respe
 ![the STEGO architecture](results/figures/stego.svg)
 
 ## Results
-Results will be posted
+We evaluate STEGO on our dataset and observed the effect of using two backbones, ViT-Base and ViT-Small architectures of DINO.
+The quantitative results demonstrate that STEGO can successfully segment upper and lower parts of liver. Challenging parts are segmenting vessels and white tissues around vessels. Most cases fail to segment white tissues while some cases are able to segment vessels.
+![predictions](results/figures/good-cases.png)

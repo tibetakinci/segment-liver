@@ -9,7 +9,6 @@ from omegaconf import DictConfig, OmegaConf
 import pytorch_lightning as pl
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import TensorBoardLogger
-#from pytorch_lightning.utilities.seed import seed_everything
 from lightning_fabric.utilities.seed import seed_everything
 import torch.multiprocessing
 import seaborn as sns
@@ -66,7 +65,7 @@ class LitUnsupervisedSegmenter(pl.LightningModule):
         super().__init__()
         self.cfg = cfg
         self.n_classes = n_classes
-        self.validation_step_outputs = []  #NEW ADDITION
+        self.validation_step_outputs = []
 
         if not cfg.continuous:
             dim = n_classes
@@ -91,15 +90,10 @@ class LitUnsupervisedSegmenter(pl.LightningModule):
 
         self.cluster_metrics = UnsupervisedMetrics(
             "test/cluster/", n_classes, cfg.extra_clusters, True)
-        self.linear_metrics = UnsupervisedMetrics(
-            "test/linear/", n_classes, 0, False)
 
         self.test_cluster_metrics = UnsupervisedMetrics(
             "final/cluster/", n_classes, cfg.extra_clusters, True)
-        self.test_linear_metrics = UnsupervisedMetrics(
-            "final/linear/", n_classes, 0, False)
 
-        self.linear_probe_loss_fn = torch.nn.CrossEntropyLoss()
         self.crf_loss_fn = ContrastiveCRFLoss(
             cfg.crf_samples, cfg.alpha, cfg.beta, cfg.gamma, cfg.w1, cfg.w2, cfg.shift)
 
@@ -127,11 +121,9 @@ class LitUnsupervisedSegmenter(pl.LightningModule):
         net_optim, linear_probe_optim, cluster_probe_optim = self.optimizers()
 
         net_optim.zero_grad()
-        #linear_probe_optim.zero_grad()
         cluster_probe_optim.zero_grad()
 
         with torch.no_grad():
-            ind = batch["ind"]
             img = batch["img"]
             img_aug = batch["img_aug"]
             coord_aug = batch["coord_aug"]
@@ -152,6 +144,7 @@ class LitUnsupervisedSegmenter(pl.LightningModule):
             signal_pos = feats_pos
 
         loss = 0
+        cont_loss = 0
 
         should_log_hist = (self.cfg.hist_freq is not None) and \
                           (self.global_step % self.cfg.hist_freq == 0) and \
@@ -192,6 +185,11 @@ class LitUnsupervisedSegmenter(pl.LightningModule):
                      self.cfg.pos_intra_weight * pos_intra_loss +
                      self.cfg.neg_inter_weight * neg_inter_loss) * self.cfg.correspondence_weight
 
+            cont_loss += (self.cfg.pos_inter_weight * pos_inter_loss +
+                         self.cfg.pos_intra_weight * pos_intra_loss +
+                         self.cfg.neg_inter_weight * neg_inter_loss) * self.cfg.correspondence_weight
+            self.log('loss/contrastive', cont_loss, **log_args)
+
         if self.cfg.rec_weight > 0:
             rec_feats = self.decoder(code)
             rec_loss = -(norm(rec_feats) * norm(feats)).sum(1).mean()
@@ -219,33 +217,20 @@ class LitUnsupervisedSegmenter(pl.LightningModule):
             self.log('loss/crf', crf, **log_args)
             loss += self.cfg.crf_weight * crf
 
-        #flat_label = label.reshape(-1)
-        #mask = (flat_label >= 0) & (flat_label < self.n_classes)
-
         detached_code = torch.clone(code.detach())
 
-        #linear_logits = self.linear_probe(detached_code)
-        #linear_logits = F.interpolate(linear_logits, label.shape[-2:], mode='bilinear', align_corners=False)
-        #linear_logits = linear_logits.permute(0, 2, 3, 1).reshape(-1, self.n_classes)
-        #linear_loss = self.linear_probe_loss_fn(linear_logits[mask], flat_label[mask]).mean()
-        #loss += linear_loss
-        #self.log('loss/linear', linear_loss, **log_args)
-
         cluster_loss, cluster_probs = self.cluster_probe(detached_code, None)
-        loss += cluster_loss
         self.log('loss/cluster', cluster_loss, **log_args)
+        loss += cluster_loss
         self.log('loss/total', loss, **log_args)
 
         self.manual_backward(loss)
         net_optim.step()
         cluster_probe_optim.step()
-        #linear_probe_optim.step()
 
         if self.cfg.reset_probe_steps is not None and self.global_step == self.cfg.reset_probe_steps:
             print("RESETTING PROBES")
-            #self.linear_probe.reset_parameters()
             self.cluster_probe.reset_parameters()
-            #self.trainer.optimizers[1] = torch.optim.Adam(list(self.linear_probe.parameters()), lr=5e-3)
             self.trainer.optimizers[2] = torch.optim.Adam(list(self.cluster_probe.parameters()), lr=5e-3)
 
         if self.global_step % 2000 == 0 and self.global_step > 0:
@@ -258,7 +243,6 @@ class LitUnsupervisedSegmenter(pl.LightningModule):
 
     def on_train_start(self):
         tb_metrics = {
-            #**self.linear_metrics.compute(),
             **self.cluster_metrics.compute()
         }
         self.logger.log_hyperparams(self.cfg, tb_metrics)
@@ -272,62 +256,39 @@ class LitUnsupervisedSegmenter(pl.LightningModule):
             feats, code = self.net(img)
             code = F.interpolate(code, label.shape[-2:], mode='bilinear', align_corners=False)
 
-            #linear_preds = self.linear_probe(code)
-            #linear_preds = linear_preds.argmax(1)
-            #self.linear_metrics.update(linear_preds, label)
-
             cluster_loss, cluster_preds = self.cluster_probe(code, None)
             cluster_preds = cluster_preds.argmax(1)
             self.cluster_metrics.update(cluster_preds, label)
 
             #### NEW ADDITION
-
             output = {
                 "img": img[:self.cfg.n_images].detach().cpu(),
-                #"linear_preds": linear_preds[:self.cfg.n_images].detach().cpu(),
                 "cluster_preds": cluster_preds[:self.cfg.n_images].detach().cpu(),
                 "label": label[:self.cfg.n_images].detach().cpu()}
-                #"label": vflip(label[:self.cfg.n_images].detach().cpu())}
 
             self.validation_step_outputs.append(output)
 
             return output
-            # return {
-            # 'img': img[:self.cfg.n_images].detach().cpu(),
-            # 'linear_preds': linear_preds[:self.cfg.n_images].detach().cpu(),
-            # "cluster_preds": cluster_preds[:self.cfg.n_images].detach().cpu(),
-            # "label": label[:self.cfg.n_images].detach().cpu()}
 
-    #def validation_epoch_end(self, outputs) -> None:
     def on_validation_epoch_end(self) -> None:
-        #super().validation_epoch_end(outputs)
         super().on_validation_epoch_end()
-        #outputs = self.validation_step_outputs
         with torch.no_grad():
             tb_metrics = {
-                #**self.linear_metrics.compute(),
                 **self.cluster_metrics.compute(),
             }
 
             if self.trainer.is_global_zero and not self.cfg.submitting_to_aml:
-                #output_num = 0
-                #output_num = random.randint(0, len(outputs) -1)
-                #output = {k: v.detach().cpu() for k, v in outputs[output_num].items()}
-                output_num = random.randint(0, len(self.validation_step_outputs)-2)
+                output_num = 1
+                #output_num = random.randint(0, len(self.validation_step_outputs)-2)
                 output = {k: v.detach().cpu() for k, v in self.validation_step_outputs[output_num].items()}
-
                 fig, ax = plt.subplots(3, self.cfg.n_images, figsize=(self.cfg.n_images * 3, 3 * 3))
                 for i in range(self.cfg.n_images):
                     ax[0, i].imshow(prep_for_plot(output["img"][i]))
                     ax[1, i].imshow(self.label_cmap[output["label"][i][0]])
                     ax[2, i].imshow(self.label_cmap[self.cluster_metrics.map_clusters(output["cluster_preds"][i])])
-                    #ax[2, i].imshow(self.label_cmap[output["linear_preds"][i]])
-                    #ax[3, i].imshow(self.label_cmap[self.cluster_metrics.map_clusters(output["cluster_preds"][i])])
                 ax[0, 0].set_ylabel("Image", fontsize=16)
                 ax[1, 0].set_ylabel("Label", fontsize=16)
                 ax[2, 0].set_ylabel("Cluster Probe", fontsize=16)
-                #ax[2, 0].set_ylabel("Linear Probe", fontsize=16)
-                #ax[3, 0].set_ylabel("Cluster Probe", fontsize=16)
                 remove_axes(ax)
                 plt.tight_layout()
                 add_plot(self.logger.experiment, "plot_labels", self.global_step)
@@ -398,7 +359,6 @@ class LitUnsupervisedSegmenter(pl.LightningModule):
                     for metric, value in tb_metrics.items():
                         run_logger.log(metric, value)
 
-            #self.linear_metrics.reset()
             self.cluster_metrics.reset()
             self.validation_step_outputs.clear()
 
@@ -498,7 +458,7 @@ def my_app(cfg: DictConfig) -> None:
         default_hp_metric=False
     )
 
-    """
+    '''
     if cfg.submitting_to_aml:
         gpu_args = dict(gpus=1, val_check_interval=250)
 
@@ -511,27 +471,26 @@ def my_app(cfg: DictConfig) -> None:
 
         if gpu_args["val_check_interval"] > len(train_loader) // 4:
             gpu_args.pop("val_check_interval")
-    """
+    '''
 
     trainer = Trainer(
         log_every_n_steps=cfg.scalar_log_freq,
         logger=tb_logger,
-        max_steps=cfg.max_steps,
-        #max_epochs=cfg.max_epochs,
+        #max_steps=cfg.max_steps,
+        max_epochs=cfg.max_epochs,
         callbacks=[
             ModelCheckpoint(
                 dirpath=join(checkpoint_dir, name),
-                every_n_train_steps=400,
-                save_top_k=2,
-                monitor="test/cluster/mIoU",
-                mode="max",
+                every_n_epochs=2,
+                save_top_k=-1,
+                #monitor="loss/contrastive",
+                mode="min",
             )
         ],
-        accelerator="cpu" #"auto"
+        accelerator="auto"
         #**gpu_args
     )
     trainer.fit(model, train_loader, val_loader)
-
 
 if __name__ == "__main__":
     prep_args()
